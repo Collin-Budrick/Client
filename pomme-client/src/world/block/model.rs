@@ -229,6 +229,8 @@ const FOLIAGE_TINTED: &[&str] = &[
     "vine",
 ];
 
+const DRY_FOLIAGE_TINTED: &[&str] = &["leaf_litter"];
+
 const GRASS_TINTED: &[&str] = &[
     "grass_block",
     "short_grass",
@@ -1264,6 +1266,11 @@ fn build_face_textures(
 fn determine_tint(block_name: &str) -> Tint {
     if GRASS_TINTED.contains(&block_name) {
         Tint::Grass
+    } else if DRY_FOLIAGE_TINTED.contains(&block_name) {
+        Tint::DryFoliage
+    // TODO: spruce_leaves and birch_leaves use fixed constant colors in vanilla
+    // (BlockColors), not biome foliage; the `_leaves` suffix rule mistints
+    // them.
     } else if FOLIAGE_TINTED.contains(&block_name) || block_name.ends_with("_leaves") {
         Tint::Foliage
     } else {

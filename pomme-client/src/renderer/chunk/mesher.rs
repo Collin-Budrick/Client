@@ -104,6 +104,7 @@ pub struct BiomeClimate {
     pub grass_color_override: Option<[f32; 3]>,
     pub grass_color_modifier: GrassColorModifier,
     pub foliage_color_override: Option<[f32; 3]>,
+    pub dry_foliage_color_override: Option<[f32; 3]>,
 }
 
 impl Default for BiomeClimate {
@@ -114,15 +115,17 @@ impl Default for BiomeClimate {
             grass_color_override: None,
             grass_color_modifier: GrassColorModifier::None,
             foliage_color_override: None,
+            dry_foliage_color_override: None,
         }
     }
 }
 
-fn tint_color(tint: Tint, grass: [f32; 3], foliage: [f32; 3]) -> u32 {
+fn tint_color(tint: Tint, grass: [f32; 3], foliage: [f32; 3], dry_foliage: [f32; 3]) -> u32 {
     match tint {
         Tint::None => PACKED_WHITE_SHIFTED,
         Tint::Grass => pack_tint_shifted(grass),
         Tint::Foliage => pack_tint_shifted(foliage),
+        Tint::DryFoliage => pack_tint_shifted(dry_foliage),
     }
 }
 
@@ -346,6 +349,7 @@ pub struct MeshDispatcher {
     uv_map: Arc<AtlasUVMap>,
     grass_colormap: Arc<Colormap>,
     foliage_colormap: Arc<Colormap>,
+    dry_foliage_colormap: Arc<Colormap>,
     biome_climate: Arc<HashMap<u32, BiomeClimate>>,
 }
 
@@ -355,6 +359,7 @@ impl MeshDispatcher {
         uv_map: AtlasUVMap,
         grass_colormap: Colormap,
         foliage_colormap: Colormap,
+        dry_foliage_colormap: Colormap,
         biome_climate: Arc<HashMap<u32, BiomeClimate>>,
     ) -> Self {
         let (result_tx, result_rx) = crossbeam_channel::unbounded();
@@ -365,6 +370,7 @@ impl MeshDispatcher {
             uv_map: Arc::new(uv_map),
             grass_colormap: Arc::new(grass_colormap),
             foliage_colormap: Arc::new(foliage_colormap),
+            dry_foliage_colormap: Arc::new(dry_foliage_colormap),
             biome_climate,
         }
     }
@@ -378,6 +384,7 @@ impl MeshDispatcher {
         let uv_map = Arc::clone(&self.uv_map);
         let grass_colormap = Arc::clone(&self.grass_colormap);
         let foliage_colormap = Arc::clone(&self.foliage_colormap);
+        let dry_foliage_colormap = Arc::clone(&self.dry_foliage_colormap);
         let biome_climate = Arc::clone(&self.biome_climate);
         let tx = self.result_tx.clone();
 
@@ -407,6 +414,7 @@ impl MeshDispatcher {
                 light,
                 grass_colormap,
                 foliage_colormap,
+                dry_foliage_colormap,
                 biome_climate,
                 min_y,
                 height,
@@ -429,6 +437,7 @@ struct ChunkStoreSnapshot {
     light: std::collections::HashMap<(i32, i32), crate::world::chunk::ChunkLightData>,
     grass_colormap: Arc<Colormap>,
     foliage_colormap: Arc<Colormap>,
+    dry_foliage_colormap: Arc<Colormap>,
     biome_climate: Arc<HashMap<u32, BiomeClimate>>,
     min_y: i32,
     height: u32,
@@ -503,12 +512,24 @@ impl ChunkStoreSnapshot {
         })
     }
 
+    fn dry_foliage_color_at(&self, x: i32, y: i32, z: i32) -> [f32; 3] {
+        let climate = self.climate_at(x, y, z);
+        climate.dry_foliage_color_override.unwrap_or_else(|| {
+            self.dry_foliage_colormap
+                .lookup(climate.temperature, climate.downfall)
+        })
+    }
+
     fn grass_tint(&self, x: i32, y: i32, z: i32) -> [f32; 3] {
         self.blend_color(x, y, z, Self::grass_color_at)
     }
 
     fn foliage_tint(&self, x: i32, y: i32, z: i32) -> [f32; 3] {
         self.blend_color(x, y, z, Self::foliage_color_at)
+    }
+
+    fn dry_foliage_tint(&self, x: i32, y: i32, z: i32) -> [f32; 3] {
+        self.blend_color(x, y, z, Self::dry_foliage_color_at)
     }
 
     fn blend_color(
@@ -703,6 +724,7 @@ fn greedy_mesh_section(
                 info.textures.tint,
                 snapshot.grass_tint(block_x, section_y, block_z),
                 snapshot.foliage_tint(block_x, section_y, block_z),
+                snapshot.dry_foliage_tint(block_x, section_y, block_z),
             );
 
             let ao = quad.ao_levels();
@@ -955,6 +977,7 @@ fn emit_baked_model(
             quad.tint,
             snapshot.grass_tint(bx, by, bz),
             snapshot.foliage_tint(bx, by, bz),
+            snapshot.dry_foliage_tint(bx, by, bz),
         );
         let lights = if let Some(dir) = quad.cullface {
             compute_face_ao(snapshot, registry, bx, by, bz, dir)
@@ -991,6 +1014,7 @@ fn emit_cube_faces(
         textures.tint,
         snapshot.grass_tint(bx, by, bz),
         snapshot.foliage_tint(bx, by, bz),
+        snapshot.dry_foliage_tint(bx, by, bz),
     );
 
     for (i, dir) in CUBE_FACE_DIRS.iter().enumerate() {
@@ -1102,6 +1126,7 @@ fn block_face_tex_tint(
                     textures.tint,
                     snapshot.grass_tint(bx, by, bz),
                     snapshot.foliage_tint(bx, by, bz),
+                    snapshot.dry_foliage_tint(bx, by, bz),
                 );
                 let tex_name = match dir {
                     Direction::Up => &textures.top,
@@ -1192,6 +1217,7 @@ fn emit_multipart(
             quad.tint,
             snapshot.grass_tint(bx, by, bz),
             snapshot.foliage_tint(bx, by, bz),
+            snapshot.dry_foliage_tint(bx, by, bz),
         );
         emit_face(
             vertices,
