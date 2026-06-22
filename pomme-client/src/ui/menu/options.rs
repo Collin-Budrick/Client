@@ -210,6 +210,11 @@ impl MainMenu {
         sh: f32,
         input: &MenuInput,
     ) -> MainMenuResult {
+        let fov_effect_label = if self.fov_effect_scale <= 0.0 {
+            "FOV Effects: OFF".to_string()
+        } else {
+            format!("FOV Effects: {}%", (self.fov_effect_scale * 100.0).round())
+        };
         let rows: Vec<OptRow> = vec![
             OptRow::Pair("Narrator: OFF", "Show Subtitles: OFF"),
             OptRow::Pair("High Contrast: OFF", "Menu Background Blur: 50%"),
@@ -220,7 +225,7 @@ impl MainMenu {
             OptRow::Pair("Chat Text Opacity: 100%", "Line Spacing: 0%"),
             OptRow::Pair("Chat Delay: None", "Notification Time: 10.0s"),
             OptRow::Pair(self.view_bobbing_label(), "Distortion Effects: 100%"),
-            OptRow::Pair("FOV Effects: 100%", "Darkness Pulsing: 100%"),
+            OptRow::Pair(&fov_effect_label, "Darkness Pulsing: 100%"),
             OptRow::Pair("Damage Tilt: 100%", "Glint Speed: 100%"),
             OptRow::Pair("Glint Strength: 100%", "Hide Lightning Flashes: OFF"),
             OptRow::Pair("Dark Loading Screen: OFF", "Panorama Scroll Speed: 100%"),
@@ -228,6 +233,7 @@ impl MainMenu {
             OptRow::Pair("Rotate with Minecart: OFF", "High Contrast Outlines: OFF"),
         ];
         let back = self.settings_back.clone_screen();
+        let sliders: &[(&str, f32)] = &[("FOV Effects:", self.fov_effect_scale)];
         self.build_options_grid(
             sw,
             sh,
@@ -236,7 +242,7 @@ impl MainMenu {
             back,
             &rows,
             &[],
-            &[],
+            sliders,
             true,
             &[],
         )
@@ -723,6 +729,7 @@ impl MainMenu {
                     self.simulation_distance = (5.0 + v * 27.0).round() as u32
                 }
                 "FOV:" => self.fov = (30.0 + v * 80.0).round() as u32,
+                "FOV Effects:" => self.fov_effect_scale = v,
                 "Master Volume:" => self.master_volume = v,
                 "Music:" => self.music_volume = v,
                 "Jukebox/Note Blocks:" => self.jukebox_volume = v,
